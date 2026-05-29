@@ -46,6 +46,36 @@ interface AdBanner {
   color: string;
 }
 
+interface LeaderEntry {
+  name: string;
+  clicks: number;
+  balance: number;
+  date: string;
+}
+
+const LEADERBOARD_KEY = "clicker_leaderboard";
+
+const getLeaderboard = (): LeaderEntry[] => {
+  try {
+    return JSON.parse(localStorage.getItem(LEADERBOARD_KEY) || "[]");
+  } catch { return []; }
+};
+
+const saveToLeaderboard = (clicks: number, balance: number) => {
+  const name = localStorage.getItem("clicker_player_name") || "";
+  if (!name) return;
+  const board = getLeaderboard();
+  const existing = board.findIndex((e) => e.name === name);
+  const entry: LeaderEntry = { name, clicks, balance, date: new Date().toLocaleDateString("ru-RU") };
+  if (existing >= 0) {
+    board[existing] = entry;
+  } else {
+    board.push(entry);
+  }
+  board.sort((a, b) => b.balance - a.balance);
+  localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(board.slice(0, 10)));
+};
+
 // ─── Ads data ────────────────────────────────────────────────────────────────
 const ADS: AdBanner[] = [
   { title: "Купи монеты за РЕАЛЬНЫЕ деньги!", desc: "Только сегодня — 1000 монет за 0 рублей 😂", emoji: "🤑", color: "from-yellow-500/20 to-orange-500/20" },
@@ -97,7 +127,10 @@ export default function Index() {
   const [totalClicks, setTotalClicks] = useState(0);
   const [upgrades, setUpgrades] = useState<Upgrade[]>(INITIAL_UPGRADES);
   const [floatTexts, setFloatTexts] = useState<FloatText[]>([]);
-  const [activeTab, setActiveTab] = useState<"shop" | "stats" | "settings" | "about">("shop");
+  const [activeTab, setActiveTab] = useState<"shop" | "stats" | "leaderboard" | "settings" | "about">("shop");
+  const [leaderboard, setLeaderboard] = useState<LeaderEntry[]>(getLeaderboard());
+  const [playerName, setPlayerName] = useState(localStorage.getItem("clicker_player_name") || "");
+  const [nameInput, setNameInput] = useState("");
   const [clickAnim, setClickAnim] = useState(false);
   const [achievements, setAchievements] = useState<Achievement[]>(
     ACHIEVEMENTS_DEF.map((a) => ({ ...a, unlocked: false }))
@@ -199,6 +232,17 @@ export default function Index() {
     }
   }, [cpc, playClick, particlesEnabled]);
 
+  // ─── Save to leaderboard ─────────────────────────────────────────────────────
+  const submitScore = useCallback(() => {
+    const name = nameInput.trim();
+    if (!name) return;
+    localStorage.setItem("clicker_player_name", name);
+    setPlayerName(name);
+    saveToLeaderboard(totalClicks, Math.floor(balance));
+    setLeaderboard(getLeaderboard());
+    setNameInput("");
+  }, [nameInput, totalClicks, balance]);
+
   // ─── Buy upgrade ────────────────────────────────────────────────────────────
   const buyUpgrade = useCallback((id: string) => {
     setUpgrades((prev) =>
@@ -265,6 +309,7 @@ export default function Index() {
             {([
               { key: "shop", label: "Магазин", emoji: "🛒" },
               { key: "stats", label: "Статистика", emoji: "📊" },
+              { key: "leaderboard", label: "Топ игроков", emoji: "🏆" },
               { key: "settings", label: "Настройки", emoji: "⚙️" },
               { key: "about", label: "О разработчиках", emoji: "👥" },
             ] as const).map((tab) => (
@@ -381,6 +426,114 @@ export default function Index() {
               </div>
             )}
 
+            {/* LEADERBOARD */}
+            {activeTab === "leaderboard" && (
+              <div className="space-y-4">
+                <h2 className="font-oswald text-lg font-bold text-purple-300">🏆 Топ игроков</h2>
+
+                {/* Submit score */}
+                <div className="glass-card-purple rounded-xl p-4 space-y-3">
+                  <div className="text-xs text-white/50 font-semibold uppercase tracking-wider">Записать счёт</div>
+                  {playerName ? (
+                    <div className="text-sm text-white/70">Игрок: <span className="text-yellow-300 font-bold">{playerName}</span></div>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Ваш никнейм..."
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && submitScore()}
+                      className="flex-1 bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-purple-400"
+                    />
+                    <button
+                      onClick={submitScore}
+                      disabled={!nameInput.trim()}
+                      className="px-3 py-2 rounded-lg bg-purple-500/30 border border-purple-500/50 text-purple-200 text-sm font-semibold hover:bg-purple-500/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      ✓
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      saveToLeaderboard(totalClicks, Math.floor(balance));
+                      setLeaderboard(getLeaderboard());
+                    }}
+                    disabled={!playerName}
+                    className="w-full py-2 rounded-lg bg-yellow-500/15 border border-yellow-500/30 text-yellow-300 text-xs font-semibold hover:bg-yellow-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    🪙 Обновить мой счёт
+                  </button>
+                </div>
+
+                {/* Top by balance */}
+                <div>
+                  <div className="text-xs text-white/50 font-semibold uppercase tracking-wider mb-2">💰 По балансу</div>
+                  {leaderboard.length === 0 ? (
+                    <div className="text-xs text-white/30 text-center py-4">Пока никого нет. Будь первым!</div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {leaderboard.slice(0, 10).map((entry, i) => (
+                        <div
+                          key={entry.name}
+                          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${
+                            entry.name === playerName ? "glass-card-purple border border-purple-400/30" : "glass-card"
+                          }`}
+                        >
+                          <span className="font-oswald text-base font-bold w-6 text-center" style={{
+                            color: i === 0 ? "#facc15" : i === 1 ? "#94a3b8" : i === 2 ? "#cd7c3e" : "rgba(255,255,255,0.4)"
+                          }}>
+                            {i === 0 ? "👑" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}`}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-white truncate">{entry.name}</div>
+                            <div className="text-xs text-white/40">{entry.date}</div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-sm font-bold neon-text-yellow">{formatNumber(entry.balance)}</div>
+                            <div className="text-xs text-white/30">{formatNumber(entry.clicks)} кл.</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Top by clicks */}
+                <div>
+                  <div className="text-xs text-white/50 font-semibold uppercase tracking-wider mb-2">🖱️ По кликам</div>
+                  {leaderboard.length === 0 ? (
+                    <div className="text-xs text-white/30 text-center py-4">Пока никого нет. Будь первым!</div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {[...leaderboard].sort((a, b) => b.clicks - a.clicks).slice(0, 10).map((entry, i) => (
+                        <div
+                          key={entry.name}
+                          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${
+                            entry.name === playerName ? "glass-card-purple border border-purple-400/30" : "glass-card"
+                          }`}
+                        >
+                          <span className="font-oswald text-base font-bold w-6 text-center" style={{
+                            color: i === 0 ? "#facc15" : i === 1 ? "#94a3b8" : i === 2 ? "#cd7c3e" : "rgba(255,255,255,0.4)"
+                          }}>
+                            {i === 0 ? "👑" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}`}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-white truncate">{entry.name}</div>
+                            <div className="text-xs text-white/40">{entry.date}</div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-sm font-bold text-cyan-300">{formatNumber(entry.clicks)}</div>
+                            <div className="text-xs text-white/30">кликов</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* SETTINGS */}
             {activeTab === "settings" && (
               <div className="space-y-4">
@@ -436,10 +589,11 @@ export default function Index() {
                   <div className="text-xs text-white/50 mt-1">Браузерная игра-кликер</div>
                 </div>
                 {[
-                  { name: "Were", role: "Разработчик", emoji: "🎮" },
+                  { name: "Were", role: "Разработчик", emoji: "💻", gradient: "from-purple-500 to-indigo-600" },
+                  { name: "Polly", role: "Помощник", emoji: "🌟", gradient: "from-pink-500 to-rose-600" },
                 ].map((dev) => (
                   <div key={dev.name} className="flex items-center gap-3 glass-card rounded-xl p-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-lg">
+                    <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${dev.gradient} flex items-center justify-center text-lg`}>
                       {dev.emoji}
                     </div>
                     <div>
