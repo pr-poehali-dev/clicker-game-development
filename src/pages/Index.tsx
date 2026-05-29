@@ -436,9 +436,7 @@ export default function Index() {
                   <div className="text-xs text-white/50 mt-1">Браузерная игра-кликер</div>
                 </div>
                 {[
-                  { name: "Главный Кликолог", role: "Геймдизайн & механики", emoji: "🎮" },
-                  { name: "Монетный Архитектор", role: "Frontend & анимации", emoji: "💻" },
-                  { name: "Пассивный Доходщик", role: "Балансировка экономики", emoji: "📐" },
+                  { name: "Were", role: "Разработчик", emoji: "🎮" },
                 ].map((dev) => (
                   <div key={dev.name} className="flex items-center gap-3 glass-card rounded-xl p-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-lg">
